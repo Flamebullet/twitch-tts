@@ -2,10 +2,12 @@
 
 2. Copy the username and password line below,
 replace username with your twitch username and password with the password you get from https://twitchapps.com/tmi/,
-enter true or false under emote to state if you want to emotes to be spoken
+enter true or false for READEMOTES to state if you want to emotes to be spoken
+enter true or false FOR IGNOREPREFIX to state if you want to ignore messages with prefix
 
 USERNAME={put your twitch username here}
 PASSWORD={get your password here https://twitchapps.com/tmi/}
-EMOTES=true/false
+READEMOTES=true/false
+IGNOREPREFIX=true/false
 
 3. Click on start.cmd and enjoy :3
