@@ -1,7 +1,7 @@
 const say = require('say');
 const tmi = require('tmi.js');
 
-const { user, password, reademotes, ignoreprefix } = require('./cred.js');
+let { user, password, reademotes, ignoreprefix } = require('./cred.js');
 
 const client = new tmi.Client({
 	options: { debug: false },
@@ -61,13 +61,12 @@ async function main() {
 		// ignore messages with prefix
 		if (ignoreprefix && message.startsWith('!')) return;
 		if (!reademotes && tags['emote-only']) return;
-		let channelName = channel.substring(1);
 		let msg = message;
 		if (!reademotes && tags.emotes) {
 			msg = removeCharactersByRanges(msg, tags.emotes);
 		}
 
-		ttsQueue.push({ username: channelName, message: msg });
+		ttsQueue.push({ username: tags.username, message: msg });
 
 		if (!currentlySpeaking) speak();
 	});
