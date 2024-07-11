@@ -1,7 +1,25 @@
 const say = require('say');
 const tmi = require('tmi.js');
+const fs = require('fs');
 
-let { user, password, reademotes, ignoreprefix } = require('./cred.js');
+let { user, password, reademotes, ignoreprefix, voice, speed } = require('./cred.js');
+voice = voice == undefined ? null : voice;
+speed = speed == undefined ? 1 : speed;
+if (user == undefined || password == undefined) {
+	const content = `USERNAME={put your twitch username here}
+PASSWORD={get your password here https://twitchapps.com/tmi/}
+READEMOTES=0
+IGNOREPREFIX=1`; // Your desired text
+	const filePath = '.env'; // Specify the file path
+
+	try {
+		fs.writeFileSync(filePath, content);
+		console.log('Open the .env file created and insert your twitch username and insert password obtained from https://twitchapps.com/tmi/');
+		process.exit(1);
+	} catch (err) {
+		console.error('Error writing to file (synchronously):', err);
+	}
+}
 
 const client = new tmi.Client({
 	options: { debug: false },
@@ -41,7 +59,7 @@ function removeCharactersByRanges(inputString, emotes) {
 
 function tts(username, text) {
 	return new Promise((resolve, reject) => {
-		say.speak(`${username} said ${text}`, null, null, (err) => {
+		say.speak(`${username} said ${text}`, voice, speed, (err) => {
 			if (err) {
 				reject(console.error(err));
 			}
