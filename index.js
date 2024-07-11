@@ -1,6 +1,11 @@
 const say = require('say');
 const tmi = require('tmi.js');
 const fs = require('fs');
+const readline = require('readline');
+const rl = readline.createInterface({
+	input: process.stdin,
+	output: process.stdout
+});
 
 let { user, password, reademotes, ignoreprefix, voice, speed } = require('./cred.js');
 voice = voice == undefined ? null : voice;
@@ -101,3 +106,13 @@ async function main() {
 }
 
 main();
+
+function commandPrompt() {
+	rl.question('', function (reply) {
+		if (reply == 's' || reply == 'skip') {
+			say.stop();
+		}
+		commandPrompt();
+	});
+}
+commandPrompt();
