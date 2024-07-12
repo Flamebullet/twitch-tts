@@ -7,5 +7,7 @@ module.exports = {
 	reademotes: !!+process.env.READEMOTES,
 	ignoreprefix: !!+process.env.IGNOREPREFIX,
 	voice: process.env.VOICE,
-	speed: process.env.SPEED
+	speed: process.env.SPEED,
+	ignoreself: process.env.IGNORESELF,
+	speechformat: process.env.SPEECHFORMAT
 };

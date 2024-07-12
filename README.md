@@ -1,20 +1,8 @@
 # Quick Start
 
-1. Create a .env file in the location of the .exe
+1. Launch the exe follow the steps to setup and enjoy :3
 
-2. Copy the username and password line below,
-   replace username with your twitch username and password with the password you get from https://twitchapps.com/tmi/,
-   enter 1 or 0 for READEMOTES to state if you want to emotes to be spoken
-   enter 1 or 0 FOR IGNOREPREFIX to state if you want to ignore messages with prefix
-
-USERNAME={put your twitch username here}
-PASSWORD={get your password here https://twitchapps.com/tmi/}
-READEMOTES=0
-IGNOREPREFIX=1
-VOICE=Microsoft David Desktop
-SPEED=1
-
-3. Launch the exe and enjoy :3
+Config files are stored under `%USERPROFILE%/twitch-tts`
 
 # Change voices
 
@@ -22,16 +10,24 @@ To change voice download and launch the checkvoices.exe file to see what voices 
 
 To download more voices head over to the following link for more instructions https://support.microsoft.com/en-gb/topic/download-languages-and-voices-for-immersive-reader-read-mode-and-read-aloud-4c83a8d8-7486-42f7-8e46-2b0fdf753130
 
+# Shortcuts
+
+-   <kbd>Alt</kbd> + <kbd>S</kbd> : Skip currently playing tts message
+
+# Chat Commands
+
+Enter in your twitch chat to perform these commands
+
+-   `!ttsskip` : Skip currently playing tts message
+-   `!ttsnick {username} {nickname}` : Give a user a nickname (Nicknames are stored in %USERPROFILE%/twitch-tts/nicknames.json)
+-   `!ttsjoin {username}` : to join another channel's chat
+-   `!ttsleave {username}` : to leave another channel's chat
+
 # Commands
 
 Enter in the terminal window to perform these commands
 
--   s || skip : to skip current message
-
-# To-Do
-
--   ignore own message
--   set nickname
--   ignore special char in name
--   ignore number in name
--   add multiple channel chat
+-   `!resetconf` : to delete config file
+-   `!nick {username} {nickname}` : Give a user a nickname (Nicknames are stored in %USERPROFILE%/twitch-tts/nicknames.json)
+-   `!join {username}` : to join another channel's chat
+-   `!leave {username}` : to leave another channel's chat

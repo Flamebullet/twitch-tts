@@ -10,6 +10,7 @@
   "license": "ISC",
   "dependencies": {
     "dotenv": "^16.4.5",
+    "node-global-key-listener": "^0.3.0",
     "say": "^0.16.0",
     "tmi.js": "^1.8.5"
   }

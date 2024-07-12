@@ -1,6 +1,8 @@
 const say = require('say');
 const tmi = require('tmi.js');
 const fs = require('fs');
+const { GlobalKeyboardListener } = require('node-global-key-listener');
+const listener = new GlobalKeyboardListener();
 const readline = require('readline');
 const rl = readline.createInterface({
 	input: process.stdin,
@@ -15,26 +17,7 @@ function questionPrompt(q) {
 	});
 }
 
-let { user, password, reademotes, ignoreprefix, voice, speed } = require('./cred.js');
-voice = voice == undefined ? null : voice;
-speed = speed == undefined ? 1 : speed;
-
-const client = new tmi.Client({
-	options: { debug: false },
-	connection: {
-		reconnect: true,
-		secure: true
-	},
-	identity: {
-		username: user,
-		password: password // https://twitchapps.com/tmi/
-	},
-	channels: []
-});
-
-function sleep(ms) {
-	return new Promise((resolve) => setTimeout(resolve, ms));
-}
+let { user, password, reademotes, ignoreprefix, voice, speed, ignoreself, speechformat } = require('./cred.js');
 
 function removeCharactersByRanges(inputString, emotes) {
 	let unsortedrange = Object.values(emotes)[0];
@@ -57,12 +40,13 @@ function removeCharactersByRanges(inputString, emotes) {
 
 function tts(username, text) {
 	return new Promise((resolve, reject) => {
-		say.speak(`${username} said ${text}`, voice, speed, (err) => {
+		say.speak(speechformat.replace('$username', username).replace('$message', text), voice, speed, (err) => {
 			if (err) {
 				reject(console.error(err));
 			}
 
-			resolve(console.log(`${username}: ${text}`));
+			// resolve(console.log(`${username}: ${text}`));
+			resolve();
 		});
 	});
 }
@@ -76,11 +60,11 @@ async function main() {
 		reply = await questionPrompt('\nPASSWORD(NOT YOUR TWITCH ACCOUNT PASSWORD! Get your password here https://twitchapps.com/tmi/): ');
 		password = reply;
 
-		reply = await questionPrompt('\nRead Emotes(1 for yes, 0 for no, recommended 0): ');
+		reply = await questionPrompt('\nRead Emotes(1 for yes, 0 for no, recommended: 0): ');
 		if (reply != 0 || reply != 1) reply = 0;
 		reademotes = reply;
 
-		reply = await questionPrompt('\nIgnore Prefix(1 for yes, 0 for no, recommended 1): ');
+		reply = await questionPrompt('\nIgnore Prefix(1 for yes, 0 for no, recommended: 1): ');
 		if (reply != 0 || reply != 1) reply = 1;
 		ignoreprefix = reply;
 
@@ -99,20 +83,30 @@ async function main() {
 			);
 		}
 		await usingVoices();
-		reply = await questionPrompt('\nTTS Voice(Default is Microsoft David Desktop (Male) or Microsoft Zira Desktop (Female):');
+		reply = await questionPrompt('\nTTS Voice(Preinstalled voices are Microsoft David Desktop (Male) and Microsoft Zira Desktop (Female):');
 		if (voicesList.indexOf(reply) === -1) reply = `Microsoft David Desktop`;
 		voice = reply;
 
-		reply = await questionPrompt('\nTTS Speed(recommended 1): ');
+		reply = await questionPrompt('\nTTS Speed(recommended: 1): ');
 		if (reply != 0 || reply != 1) reply = 1;
 		speed = reply;
 
-		const content = `USERNAME=${user},
+		reply = await questionPrompt('\nIgnore own message(recommended: 1): ');
+		if (reply != 0 || reply != 1) reply = 1;
+		ignoreself = reply;
+
+		reply = await questionPrompt('\nSpeech Format(Default: $username said $message): ');
+		if (reply == '' || reply == undefined) reply = '$username said $message';
+		speechformat = reply;
+
+		const content = `USER=${user}
 PASSWORD=${password}
 READEMOTES=${reademotes}
 IGNOREPREFIX=${ignoreprefix}
 VOICE=${voice}
-SPEED=${speed}`;
+SPEED=${speed}
+IGNORESELF=${ignoreself}
+SPEECHFORMAT=${speechformat}`;
 		const folderPath = process.env.USERPROFILE + '/twitch-tts';
 		if (!fs.existsSync(folderPath)) {
 			fs.mkdirSync(folderPath);
@@ -128,26 +122,112 @@ SPEED=${speed}`;
 		}
 	}
 
+	let nicknames;
+	const nickJsonFilePath = process.env.USERPROFILE + '/twitch-tts/nicknames.json';
+	if (fs.existsSync(nickJsonFilePath)) {
+		nicknames = JSON.parse(fs.readFileSync(nickJsonFilePath));
+	} else {
+		fs.writeFileSync(nickJsonFilePath, JSON.stringify({}));
+		nicknames = {};
+	}
+
+	const client = new tmi.Client({
+		options: { debug: true },
+		connection: {
+			reconnect: true,
+			secure: true
+		},
+		identity: {
+			username: user,
+			password: password // https://twitchapps.com/tmi/
+		},
+		channels: []
+	});
 	await client.connect();
-	await client.join(user);
+	await client.join(user).catch((err) => {
+		console.error(err);
+	});
+
+	let joinChannels;
+	const joinChannelsFilePath = process.env.USERPROFILE + '/twitch-tts/joinchannels.txt';
+	if (fs.existsSync(joinChannelsFilePath)) {
+		let nicknames = fs.readFileSync(joinChannelsFilePath, 'utf8');
+		if (nicknames == '') {
+			joinChannels = [];
+		} else {
+			joinChannels = nicknames.split(', ');
+		}
+		if (joinChannels.length > 0) {
+			for (let index in joinChannels) {
+				await client.join(joinChannels[index]).catch((err) => {
+					console.error(err);
+				});
+			}
+		}
+	} else {
+		fs.writeFileSync(joinChannelsFilePath, '', 'utf8');
+		joinChannels = [];
+	}
 
 	commandPrompt();
 
 	let ttsQueue = [],
 		currentlySpeaking = false;
 	client.on('message', async (channel, tags, message, self) => {
-		// ignore messages with prefix
+		if (((tags.badges && tags.badges.broadcaster == '1') || tags.mod) && message.startsWith('!')) {
+			if (message.toLowerCase() == '!ttsskip') {
+				skipTTS();
+				client.say(channel, `skipped!`);
+			} else if (message.split(' ')[0] == '!ttsnick') {
+				setNickname(nicknames, message, nickJsonFilePath);
+				client.say(channel, `${tags.username} set ${message.split(' ')[1].toLowerCase()} to ${message.split(' ')[2].toLowerCase()}!`);
+			} else if (message.split(' ')[0] == '!ttsjoin') {
+				joinChannelChat(client, joinChannels, message, joinChannelsFilePath);
+				client.say(channel, `${tags.username} joined ${message.split(' ')[1]} chat`);
+			} else if (message.split(' ')[0] == '!ttsleave') {
+				leaveChannelChat(client, joinChannels, message, joinChannelsFilePath);
+				client.say(channel, `${tags.username} left ${message.split(' ')[1]} chat`);
+			}
+		}
+		// Skip messages with prefix !
 		if (ignoreprefix && message.startsWith('!')) return;
+		// Skip message with only emotes
 		if (!reademotes && tags['emote-only']) return;
+		// Skip message from yourself
+		if (!ignoreself && tags.username.toLowerCase() == user.toLowerCase()) return;
+
 		let msg = message;
+		// Remove emotes from messages if dont read emotes is selected
 		if (!reademotes && tags.emotes) {
 			msg = removeCharactersByRanges(msg, tags.emotes);
 		}
 
-		ttsQueue.push({ username: tags.username, message: msg });
+		let username = tags.username;
+		if (tags.username in nicknames) {
+			username = nicknames[tags.username];
+		}
+
+		ttsQueue.push({ username: username, message: msg });
 
 		if (!currentlySpeaking) speak();
 	});
+
+	function commandPrompt() {
+		rl.question('', async function (reply) {
+			if (reply == '!resetconf') {
+				fs.unlinkSync(process.env.USERPROFILE + '/twitch-tts/.env');
+				console.log('Config file deleted! Aborting process...');
+				process.exit(1);
+			} else if (reply.split(' ')[0] == '!join') {
+				await joinChannelChat(client, joinChannels, reply, joinChannelsFilePath);
+			} else if (reply.split(' ')[0] == '!leave') {
+				leaveChannelChat(client, joinChannels, reply, joinChannelsFilePath);
+			} else if (reply.split(' ')[0] == '!nick') {
+				setNickname(nicknames, reply, nickJsonFilePath);
+			}
+			commandPrompt();
+		});
+	}
 
 	async function speak() {
 		currentlySpeaking = true;
@@ -162,11 +242,62 @@ SPEED=${speed}`;
 
 main();
 
-function commandPrompt() {
-	rl.question('', function (reply) {
-		if (reply == 's' || reply == 'skip') {
-			say.stop();
-		}
-		commandPrompt();
-	});
+listener.addListener((e, down) => {
+	if (down['S'] && (down['LEFT ALT'] || down['RIGHT ALT'])) {
+		skipTTS();
+	}
+});
+
+function skipTTS() {
+	say.stop();
+	console.log('Skipped!');
+}
+
+function setNickname(nicknames, reply, nickJsonFilePath) {
+	const username = reply.split(' ')[1].toLowerCase();
+	const nickname = reply.split(' ')[2].toLowerCase();
+
+	// remove @ if start with @
+	if (username.startsWith('@')) {
+		username = username.substring(1);
+	}
+
+	nicknames[username] = nickname;
+
+	fs.writeFileSync(nickJsonFilePath, JSON.stringify(nicknames));
+	process.env.USERPROFILE + '/twitch-tts/.env';
+	console.log(`Successfully set nickname for ${username} to ${nickname}`);
+}
+
+async function joinChannelChat(client, joinChannels, reply, joinChannelsFilePath) {
+	const joinChannel = reply.split(' ')[1].toLowerCase();
+
+	// remove @ if start with @
+	if (joinChannel.startsWith('@')) {
+		joinChannel = joinChannel.substring(1);
+	}
+
+	await client.join(joinChannel);
+	joinChannels.push(joinChannel);
+	fs.writeFileSync(joinChannelsFilePath, joinChannels.join(', '), 'utf8');
+}
+
+async function leaveChannelChat(client, joinChannels, reply, joinChannelsFilePath) {
+	const joinChannel = reply.split(' ')[1];
+
+	// remove @ if start with @
+	if (joinChannel.startsWith('@')) {
+		joinChannel = joinChannel.substring(1);
+	}
+
+	await client.part(joinChannel);
+	const toRemove = myArray.indexOf(joinChannel);
+	joinChannels.splice(toRemove, 1);
+	fs.writeFileSync(joinChannelsFilePath, joinChannels.join(', '), 'utf8');
+}
+
+listener.start();
+
+function sleep(ms) {
+	return new Promise((resolve) => setTimeout(resolve, ms));
 }
