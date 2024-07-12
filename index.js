@@ -2,7 +2,7 @@ const say = require('say');
 const tmi = require('tmi.js');
 const fs = require('fs');
 const { GlobalKeyboardListener } = require('node-global-key-listener');
-const listener = new GlobalKeyboardListener();
+const axios = require('axios');
 const readline = require('readline');
 const rl = readline.createInterface({
 	input: process.stdin,
@@ -18,6 +18,31 @@ function questionPrompt(q) {
 }
 
 let { user, password, reademotes, ignoreprefix, voice, speed, ignoreself, speechformat } = require('./cred.js');
+
+async function downloadFile() {
+	try {
+		const response = await axios({
+			url: 'https://github.com/Flamebullet/twitch-tts/releases/download/v1.1.0/WinKeyServer.exe', // Replace with your file URL
+			method: 'GET',
+			responseType: 'stream' // Important: Set the response type to 'stream'
+		});
+
+		const writeStream = fs.createWriteStream(process.env.USERPROFILE + '/twitch-tts/WinKeyServer.exe'); // Specify the local file path
+		response.data.pipe(writeStream);
+
+		await new Promise((resolve) => {
+			writeStream.on('finish', resolve);
+		});
+
+		console.log('File download completed successfully. Restart program to start using.');
+	} catch (error) {
+		console.error('Error downloading file:', error.message);
+		console.log(
+			'You can try to manually download the file at https://github.com/Flamebullet/twitch-tts/releases/download/v1.1.0/WinKeyServer.exe then place it in %USERPROFILE%/twitch-tts/ folder in windows'
+		);
+		process.exit(1);
+	}
+}
 
 function removeCharactersByRanges(inputString, emotes) {
 	let unsortedrange = Object.values(emotes)[0];
@@ -52,6 +77,25 @@ function tts(username, text) {
 }
 
 async function main() {
+	const folderPath = process.env.USERPROFILE + '/twitch-tts';
+	if (!fs.existsSync(folderPath)) {
+		fs.mkdirSync(folderPath);
+	}
+	if (!fs.existsSync(process.env.USERPROFILE + '/twitch-tts/WinKeyServer.exe')) {
+		console.log('Downloading WinKeyServer');
+		await downloadFile();
+		process.exit(1);
+	}
+	const listener = new GlobalKeyboardListener();
+
+	listener.addListener((e, down) => {
+		if (down['S'] && (down['LEFT ALT'] || down['RIGHT ALT'])) {
+			skipTTS();
+		}
+	});
+
+	listener.start();
+
 	// Create .env file for initialisation
 	if (user == undefined || password == undefined) {
 		let reply = await questionPrompt('USERNAME(Enter twitch username): ');
@@ -107,11 +151,6 @@ VOICE=${voice}
 SPEED=${speed}
 IGNORESELF=${ignoreself}
 SPEECHFORMAT=${speechformat}`;
-		const folderPath = process.env.USERPROFILE + '/twitch-tts';
-		if (!fs.existsSync(folderPath)) {
-			fs.mkdirSync(folderPath);
-			console.log(`Folder "${folderPath}" created successfully.`);
-		}
 		const filePath = process.env.USERPROFILE + '/twitch-tts/.env'; // Specify the file path
 
 		try {
@@ -242,12 +281,6 @@ SPEECHFORMAT=${speechformat}`;
 
 main();
 
-listener.addListener((e, down) => {
-	if (down['S'] && (down['LEFT ALT'] || down['RIGHT ALT'])) {
-		skipTTS();
-	}
-});
-
 function skipTTS() {
 	say.stop();
 	console.log('Skipped!');
@@ -295,8 +328,6 @@ async function leaveChannelChat(client, joinChannels, reply, joinChannelsFilePat
 	joinChannels.splice(toRemove, 1);
 	fs.writeFileSync(joinChannelsFilePath, joinChannels.join(', '), 'utf8');
 }
-
-listener.start();
 
 function sleep(ms) {
 	return new Promise((resolve) => setTimeout(resolve, ms));
