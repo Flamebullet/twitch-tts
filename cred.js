@@ -1,5 +1,5 @@
 const dotenv = require('dotenv');
-dotenv.config();
+dotenv.config({ path: process.env.USERPROFILE + '/twitch-tts/.env' });
 
 module.exports = {
 	user: process.env.USER,

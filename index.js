@@ -7,24 +7,17 @@ const rl = readline.createInterface({
 	output: process.stdout
 });
 
+function questionPrompt(q) {
+	return new Promise((resolve, reject) => {
+		rl.question(q, (userInput) => {
+			resolve(userInput);
+		});
+	});
+}
+
 let { user, password, reademotes, ignoreprefix, voice, speed } = require('./cred.js');
 voice = voice == undefined ? null : voice;
 speed = speed == undefined ? 1 : speed;
-if (user == undefined || password == undefined) {
-	const content = `USERNAME={put your twitch username here}
-PASSWORD={get your password here https://twitchapps.com/tmi/}
-READEMOTES=0
-IGNOREPREFIX=1`; // Your desired text
-	const filePath = '.env'; // Specify the file path
-
-	try {
-		fs.writeFileSync(filePath, content);
-		console.log('Open the .env file created and insert your twitch username and insert password obtained from https://twitchapps.com/tmi/');
-		process.exit(1);
-	} catch (err) {
-		console.error('Error writing to file (synchronously):', err);
-	}
-}
 
 const client = new tmi.Client({
 	options: { debug: false },
@@ -75,8 +68,70 @@ function tts(username, text) {
 }
 
 async function main() {
+	// Create .env file for initialisation
+	if (user == undefined || password == undefined) {
+		let reply = await questionPrompt('USERNAME(Enter twitch username): ');
+		user = reply;
+
+		reply = await questionPrompt('\nPASSWORD(NOT YOUR TWITCH ACCOUNT PASSWORD! Get your password here https://twitchapps.com/tmi/): ');
+		password = reply;
+
+		reply = await questionPrompt('\nRead Emotes(1 for yes, 0 for no, recommended 0): ');
+		if (reply != 0 || reply != 1) reply = 0;
+		reademotes = reply;
+
+		reply = await questionPrompt('\nIgnore Prefix(1 for yes, 0 for no, recommended 1): ');
+		if (reply != 0 || reply != 1) reply = 1;
+		ignoreprefix = reply;
+
+		let voicesList;
+		function getVoices() {
+			return new Promise((resolve) => {
+				say.getInstalledVoices((err, voice) => {
+					return resolve(voice);
+				});
+			});
+		}
+		async function usingVoices() {
+			voicesList = await getVoices();
+			console.log(
+				`\n\nList of available voices: ${voicesList} \nCheck out the following link to download more: https://support.microsoft.com/en-gb/topic/download-languages-and-voices-for-immersive-reader-read-mode-and-read-aloud-4c83a8d8-7486-42f7-8e46-2b0fdf753130`
+			);
+		}
+		await usingVoices();
+		reply = await questionPrompt('\nTTS Voice(Default is Microsoft David Desktop (Male) or Microsoft Zira Desktop (Female):');
+		if (voicesList.indexOf(reply) === -1) reply = `Microsoft David Desktop`;
+		voice = reply;
+
+		reply = await questionPrompt('\nTTS Speed(recommended 1): ');
+		if (reply != 0 || reply != 1) reply = 1;
+		speed = reply;
+
+		const content = `USERNAME=${user},
+PASSWORD=${password}
+READEMOTES=${reademotes}
+IGNOREPREFIX=${ignoreprefix}
+VOICE=${voice}
+SPEED=${speed}`;
+		const folderPath = process.env.USERPROFILE + '/twitch-tts';
+		if (!fs.existsSync(folderPath)) {
+			fs.mkdirSync(folderPath);
+			console.log(`Folder "${folderPath}" created successfully.`);
+		}
+		const filePath = process.env.USERPROFILE + '/twitch-tts/.env'; // Specify the file path
+
+		try {
+			fs.writeFileSync(filePath, content);
+			console.log('\n\n.env file created successfully!');
+		} catch (err) {
+			console.error('Error writing to file (synchronously):', err);
+		}
+	}
+
 	await client.connect();
 	await client.join(user);
+
+	commandPrompt();
 
 	let ttsQueue = [],
 		currentlySpeaking = false;
@@ -115,4 +170,3 @@ function commandPrompt() {
 		commandPrompt();
 	});
 }
-commandPrompt();
