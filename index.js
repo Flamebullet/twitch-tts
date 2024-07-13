@@ -331,7 +331,7 @@ async function leaveChannelChat(client, joinChannels, reply, joinChannelsFilePat
 	}
 
 	await client.part(joinChannel);
-	const toRemove = myArray.indexOf(joinChannel);
+	const toRemove = joinChannels.indexOf(joinChannel);
 	joinChannels.splice(toRemove, 1);
 	fs.writeFileSync(joinChannelsFilePath, joinChannels.join(', '), 'utf8');
 }
