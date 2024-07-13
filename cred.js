@@ -9,5 +9,6 @@ module.exports = {
 	voice: process.env.VOICE,
 	speed: process.env.SPEED,
 	ignoreself: process.env.IGNORESELF,
+	trailingnum: process.env.TRAILINGNUM,
 	speechformat: process.env.SPEECHFORMAT
 };

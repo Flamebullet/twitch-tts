@@ -17,7 +17,7 @@ function questionPrompt(q) {
 	});
 }
 
-let { user, password, reademotes, ignoreprefix, voice, speed, ignoreself, speechformat } = require('./cred.js');
+let { user, password, reademotes, ignoreprefix, voice, speed, ignoreself, speechformat, trailingnum } = require('./cred.js');
 
 async function downloadFile() {
 	try {
@@ -139,6 +139,10 @@ async function main() {
 		if (reply != 0 || reply != 1) reply = 1;
 		ignoreself = reply;
 
+		reply = await questionPrompt('\nSay trailing numbers in username(recommended: 0): ');
+		if (reply != 0 || reply != 1) reply = 0;
+		trailingnum = reply;
+
 		reply = await questionPrompt('\nSpeech Format(Default: $username said $message): ');
 		if (reply == '' || reply == undefined) reply = '$username said $message';
 		speechformat = reply;
@@ -150,6 +154,7 @@ IGNOREPREFIX=${ignoreprefix}
 VOICE=${voice}
 SPEED=${speed}
 IGNORESELF=${ignoreself}
+TRAILINGNUM=${trailingnum}
 SPEECHFORMAT=${speechformat}`;
 		const filePath = process.env.USERPROFILE + '/twitch-tts/.env'; // Specify the file path
 
@@ -244,6 +249,8 @@ SPEECHFORMAT=${speechformat}`;
 		let username = tags.username;
 		if (tags.username in nicknames) {
 			username = nicknames[tags.username];
+		} else if (tags.username && !trailingnum) {
+			username = tags.username.replace(/\d+$/, '');
 		}
 
 		ttsQueue.push({ username: username, message: msg });
