@@ -9,6 +9,21 @@ const rl = readline.createInterface({
 	output: process.stdout
 });
 
+// webserver stuff
+const express = require('express');
+const http = require('http');
+const path = require('path');
+const app = express();
+const port = 3000;
+
+app.set('views', path.join(__dirname, 'views'));
+app.set('view engine', 'ejs');
+app.use(express.json());
+
+// twitch evensub stuff
+const { EventSub } = require('@twapi/eventsub');
+const { Credentials, AuthProvider } = require('@twapi/auth');
+
 function questionPrompt(q) {
 	return new Promise((resolve, reject) => {
 		rl.question(q, (userInput) => {
@@ -17,7 +32,21 @@ function questionPrompt(q) {
 	});
 }
 
-let { user, password, reademotes, ignoreprefix, voice, speed, ignoreself, speechformat, trailingnum } = require('./cred.js');
+let {
+	user,
+	password,
+	reademotes,
+	ignoreprefix,
+	voice,
+	speed,
+	ignoreself,
+	speechformat,
+	redeemformat,
+	trailingnum,
+	acctoken,
+	readredeems
+} = require('./cred.js');
+const { twitchid, twitchsecret } = require('./twitchcred.js');
 
 async function downloadFile() {
 	try {
@@ -63,14 +92,13 @@ function removeCharactersByRanges(inputString, emotes) {
 	return inputString;
 }
 
-function tts(username, text) {
+function tts(text) {
 	return new Promise((resolve, reject) => {
-		say.speak(speechformat.replace('$username', username).replace('$message', text), voice, speed, (err) => {
+		say.speak(text, voice, speed, (err) => {
 			if (err) {
 				reject(console.error(err));
 			}
 
-			// resolve(console.log(`${username}: ${text}`));
 			resolve();
 		});
 	});
@@ -96,6 +124,14 @@ async function main() {
 
 	listener.start();
 
+	function getVoices() {
+		return new Promise((resolve) => {
+			say.getInstalledVoices((err, voice) => {
+				return resolve(voice);
+			});
+		});
+	}
+
 	// Create .env file for initialisation
 	if (user == undefined || password == undefined) {
 		let reply = await questionPrompt('USERNAME(Enter twitch username): ');
@@ -113,17 +149,10 @@ async function main() {
 		ignoreprefix = reply;
 
 		let voicesList;
-		function getVoices() {
-			return new Promise((resolve) => {
-				say.getInstalledVoices((err, voice) => {
-					return resolve(voice);
-				});
-			});
-		}
 		async function usingVoices() {
 			voicesList = await getVoices();
 			console.log(
-				`\n\nList of available voices: ${voicesList} \nCheck out the following link to download more: https://support.microsoft.com/en-gb/topic/download-languages-and-voices-for-immersive-reader-read-mode-and-read-aloud-4c83a8d8-7486-42f7-8e46-2b0fdf753130`
+				`\n\nList of available voices: ${voicesList} \n\nCheck out the following link to download more: https://support.microsoft.com/en-gb/topic/download-languages-and-voices-for-immersive-reader-read-mode-and-read-aloud-4c83a8d8-7486-42f7-8e46-2b0fdf753130`
 			);
 		}
 		await usingVoices();
@@ -132,7 +161,7 @@ async function main() {
 		voice = reply;
 
 		reply = await questionPrompt('\nTTS Speed(recommended: 1): ');
-		if (reply != 0 || reply != 1) reply = 1;
+		if (reply <= 0) reply = 1;
 		speed = reply;
 
 		reply = await questionPrompt('\nIgnore own message(recommended: 1): ');
@@ -143,9 +172,48 @@ async function main() {
 		if (reply != 0 || reply != 1) reply = 0;
 		trailingnum = reply;
 
+		reply = await questionPrompt('\nRead twitch redeems(recommended: 0): ');
+		if (reply != 0 || reply != 1) reply = 0;
+		readredeems = reply;
+
 		reply = await questionPrompt('\nSpeech Format(Default: $username said $message): ');
 		if (reply == '' || reply == undefined) reply = '$username said $message';
 		speechformat = reply;
+
+		reply = await questionPrompt('\nRedeem Format(Default: $username redeemed $redeem for $cost): ');
+		if (reply == '' || reply == undefined) reply = '$username redeemed $redeem for $cost';
+		redeemformat = reply;
+
+		let accToken = '';
+		const server = http.createServer(app);
+		// Start the server
+		server.listen(port, () => {
+			console.log(
+				`\nAuthenticate your twitch account here https://id.twitch.tv/oauth2/authorize?response_type=token&client_id=v9xn3jant9hwlkm89sf18no945kh7e&redirect_uri=http://localhost:3000&scope=channel%3Aread%3Aredemptions`
+			);
+		});
+
+		app.get('/', (req, res) => {
+			const err = req.query.err ? req.query.err : null;
+
+			return res.render('index', { err: err });
+		});
+
+		// Listener for POST requests
+		app.post('/post', (req, res) => {
+			accToken = req.body.access_token;
+			// Process the URL as needed (e.g., save to a database, perform some action)
+			res.status(200).end();
+			server.close(() => {
+				setImmediate(() => {
+					server.emit('close');
+				});
+			});
+		});
+
+		while (accToken == '') {
+			await sleep(2000);
+		}
 
 		const content = `USER=${user}
 PASSWORD=${password}
@@ -155,7 +223,10 @@ VOICE=${voice}
 SPEED=${speed}
 IGNORESELF=${ignoreself}
 TRAILINGNUM=${trailingnum}
-SPEECHFORMAT=${speechformat}`;
+READREDEEMS=${readredeems}
+SPEECHFORMAT=${speechformat}
+REDEEMFORMAT=${redeemformat}
+ACCTOKEN=${accToken}`;
 		const filePath = process.env.USERPROFILE + '/twitch-tts/.env'; // Specify the file path
 
 		try {
@@ -174,6 +245,22 @@ SPEECHFORMAT=${speechformat}`;
 		fs.writeFileSync(nickJsonFilePath, JSON.stringify({}));
 		nicknames = {};
 	}
+
+	const credentials = new Credentials(acctoken, twitchid, twitchsecret);
+	const authProvider = new AuthProvider(credentials);
+
+	const TEclient = new EventSub(authProvider);
+	TEclient.run();
+
+	const result = await axios({
+		method: 'get',
+		url: `https://api.twitch.tv/helix/users?login=${user}`,
+		headers: {
+			'Client-ID': twitchid,
+			'Authorization': `Bearer ${await authProvider.getUserAccessToken()}`
+		}
+	});
+	let userId = result.data.data[0].id;
 
 	const client = new tmi.Client({
 		options: { debug: true },
@@ -217,6 +304,27 @@ SPEECHFORMAT=${speechformat}`;
 
 	let ttsQueue = [],
 		currentlySpeaking = false;
+
+	if (readredeems == true) {
+		TEclient.register('channelPointsCustomRewardRedemptionAdd', {
+			broadcaster_user_id: userId
+		}).onTrigger(async (data) => {
+			let username = data.user_login;
+			if (username in nicknames) {
+				username = nicknames[username];
+			} else if (username && !trailingnum) {
+				username = username.replace(/\d+$/, '');
+			}
+
+			const formatedmsg = redeemformat.replace('$username', username).replace('$redeem', data.reward.title).replace('$cost', data.reward.cost);
+			console.log(`${username} redeemed ${data.reward.title} for ${data.reward.cost} channel points`);
+
+			ttsQueue.push(formatedmsg);
+
+			if (!currentlySpeaking) speak();
+		});
+	}
+
 	client.on('message', async (channel, tags, message, self) => {
 		if (((tags.badges && tags.badges.broadcaster == '1') || tags.mod) && message.startsWith('!')) {
 			if (message.toLowerCase() == '!ttsskip') {
@@ -253,7 +361,9 @@ SPEECHFORMAT=${speechformat}`;
 			username = tags.username.replace(/\d+$/, '');
 		}
 
-		ttsQueue.push({ username: username, message: msg });
+		const formatedmsg = speechformat.replace('$username', username).replace('$message', msg);
+
+		ttsQueue.push(formatedmsg);
 
 		if (!currentlySpeaking) speak();
 	});
@@ -270,6 +380,13 @@ SPEECHFORMAT=${speechformat}`;
 				leaveChannelChat(client, joinChannels, reply, joinChannelsFilePath);
 			} else if (reply.split(' ')[0] == '!nick') {
 				setNickname(nicknames, reply, nickJsonFilePath);
+			} else if (reply.split(' ')[0] == '!read') {
+				let words = reply.split(' ');
+				words.shift();
+				say.speak(words.join(' '), voice, speed, (err) => {});
+			} else if (reply.split(' ')[0] == '!voices') {
+				voicesList = await getVoices();
+				console.log(voicesList);
 			}
 			commandPrompt();
 		});
@@ -279,7 +396,7 @@ SPEECHFORMAT=${speechformat}`;
 		currentlySpeaking = true;
 		while (ttsQueue.length > 0) {
 			const ttsMsg = ttsQueue.shift();
-			await tts(ttsMsg.username, ttsMsg.message);
+			await tts(ttsMsg);
 			await sleep(500);
 			if (ttsQueue.length == 0) currentlySpeaking = false;
 		}

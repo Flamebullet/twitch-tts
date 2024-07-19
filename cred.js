@@ -10,5 +10,8 @@ module.exports = {
 	speed: process.env.SPEED,
 	ignoreself: process.env.IGNORESELF,
 	trailingnum: process.env.TRAILINGNUM,
-	speechformat: process.env.SPEECHFORMAT
+	readredeems: process.env.READREDEEMS,
+	speechformat: process.env.SPEECHFORMAT,
+	redeemformat: process.env.REDEEMFORMAT,
+	acctoken: process.env.ACCTOKEN
 };

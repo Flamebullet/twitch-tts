@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Document</title>
+
+		<script>
+			// Assuming you're using vanilla JavaScript
+			const url = new URL(window.location.href);
+			const fragment = url.hash.substring(1); // Remove the leading '#'
+			const params = new URLSearchParams(fragment);
+
+			const accessToken = params.get('access_token');
+			const tokenType = params.get('token_type');
+
+			const data = { access_token: accessToken, token_type: tokenType }; // Replace with your actual data
+
+			fetch('http://localhost:3000/post', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify(data)
+			})
+				.then((response) => response.json())
+				.then((result) => {
+					console.log('Response:', result);
+				})
+				.catch((error) => {
+					console.error('Error:', error);
+				});
+		</script>
+	</head>
+	<body>
+		Authentication successful, you may close this tab now :)
+	</body>
+</html>
