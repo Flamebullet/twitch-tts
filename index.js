@@ -246,6 +246,15 @@ ACCTOKEN=${accToken}`;
 		nicknames = {};
 	}
 
+	let replacements;
+	const replacementJsonFilePath = process.env.USERPROFILE + '/twitch-tts/replacement.json';
+	if (fs.existsSync(replacementJsonFilePath)) {
+		replacements = JSON.parse(fs.readFileSync(replacementJsonFilePath));
+	} else {
+		fs.writeFileSync(replacementJsonFilePath, JSON.stringify({}));
+		replacements = {};
+	}
+
 	const credentials = new Credentials(acctoken, twitchid, twitchsecret);
 	const authProvider = new AuthProvider(credentials);
 
@@ -282,11 +291,11 @@ ACCTOKEN=${accToken}`;
 	let joinChannels;
 	const joinChannelsFilePath = process.env.USERPROFILE + '/twitch-tts/joinchannels.txt';
 	if (fs.existsSync(joinChannelsFilePath)) {
-		let nicknames = fs.readFileSync(joinChannelsFilePath, 'utf8');
-		if (nicknames == '') {
+		let jnchannels = fs.readFileSync(joinChannelsFilePath, 'utf8');
+		if (jnchannels == '') {
 			joinChannels = [];
 		} else {
-			joinChannels = nicknames.split(', ');
+			joinChannels = jnchannels.split(', ');
 		}
 		if (joinChannels.length > 0) {
 			for (let index in joinChannels) {
@@ -332,7 +341,14 @@ ACCTOKEN=${accToken}`;
 				client.say(channel, `skipped!`);
 			} else if (message.split(' ')[0] == '!ttsnick') {
 				setNickname(nicknames, message, nickJsonFilePath);
-				client.say(channel, `${tags.username} set ${message.split(' ')[1].toLowerCase()} to ${message.split(' ')[2].toLowerCase()}!`);
+				const words = message.split(' ');
+				const nickname = words.slice(2).join(' ').toLowerCase();
+				client.say(channel, `${tags.username} set ${message.split(' ')[1].toLowerCase()} to ${nickname}`);
+			} else if (message.split(' ')[0] == '!ttsreplace') {
+				setReplacement(replacements, message, replacementJsonFilePath);
+				const words = message.split(' ');
+				const replacement = words.slice(2).join(' ').toLowerCase();
+				client.say(channel, `${tags.username} set ${message.split(' ')[1].toLowerCase()} to ${replacement}`);
 			} else if (message.split(' ')[0] == '!ttsjoin') {
 				joinChannelChat(client, joinChannels, message, joinChannelsFilePath);
 				client.say(channel, `${tags.username} joined ${message.split(' ')[1]} chat`);
@@ -346,7 +362,7 @@ ACCTOKEN=${accToken}`;
 		// Skip message with only emotes
 		if (!reademotes && tags['emote-only']) return;
 		// Skip message from yourself
-		if (!ignoreself && tags.username.toLowerCase() == user.toLowerCase()) return;
+		if (ignoreself && tags.username.toLowerCase() == user.toLowerCase()) return;
 
 		let msg = message;
 		// Remove emotes from messages if dont read emotes is selected
@@ -360,6 +376,8 @@ ACCTOKEN=${accToken}`;
 		} else if (tags.username && !trailingnum) {
 			username = tags.username.replace(/\d+$/, '');
 		}
+
+		msg = msg.replace(/(\w+)/g, (match, key) => replacements[key] || match);
 
 		const formatedmsg = speechformat.replace('$username', username).replace('$message', msg);
 
@@ -380,6 +398,8 @@ ACCTOKEN=${accToken}`;
 				leaveChannelChat(client, joinChannels, reply, joinChannelsFilePath);
 			} else if (reply.split(' ')[0] == '!nick') {
 				setNickname(nicknames, reply, nickJsonFilePath);
+			} else if (reply.split(' ')[0] == '!replace') {
+				setReplacement(replacements, reply, replacementJsonFilePath);
 			} else if (reply.split(' ')[0] == '!read') {
 				let words = reply.split(' ');
 				words.shift();
@@ -411,8 +431,9 @@ function skipTTS() {
 }
 
 function setNickname(nicknames, reply, nickJsonFilePath) {
-	const username = reply.split(' ')[1].toLowerCase();
-	const nickname = reply.split(' ')[2].toLowerCase();
+	let username = reply.split(' ')[1].toLowerCase();
+	const words = reply.split(' ');
+	const nickname = words.slice(2).join(' ').toLowerCase();
 
 	// remove @ if start with @
 	if (username.startsWith('@')) {
@@ -422,8 +443,18 @@ function setNickname(nicknames, reply, nickJsonFilePath) {
 	nicknames[username] = nickname;
 
 	fs.writeFileSync(nickJsonFilePath, JSON.stringify(nicknames));
-	process.env.USERPROFILE + '/twitch-tts/.env';
 	console.log(`Successfully set nickname for ${username} to ${nickname}`);
+}
+
+function setReplacement(replacements, reply, replacementJsonFilePath) {
+	const shortform = reply.split(' ')[1].toLowerCase();
+	const words = reply.split(' ');
+	const replacement = words.slice(2).join(' ').toLowerCase();
+
+	replacements[shortform] = replacement;
+
+	fs.writeFileSync(replacementJsonFilePath, JSON.stringify(replacements));
+	console.log(`Successfully set replacement word from ${shortform} to ${replacement}`);
 }
 
 async function joinChannelChat(client, joinChannels, reply, joinChannelsFilePath) {
