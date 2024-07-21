@@ -44,9 +44,10 @@ let {
 	redeemformat,
 	trailingnum,
 	acctoken,
-	readredeems
+	readredeems,
+	twitchid
 } = require('./cred.js');
-const { twitchid, twitchsecret } = require('./twitchcred.js');
+const { twitchsecret } = require('./twitchcred.js');
 
 async function downloadFile() {
 	try {
@@ -226,7 +227,8 @@ TRAILINGNUM=${trailingnum}
 READREDEEMS=${readredeems}
 SPEECHFORMAT=${speechformat}
 REDEEMFORMAT=${redeemformat}
-ACCTOKEN=${accToken}`;
+ACCTOKEN=${accToken}
+TWITCHID=v9xn3jant9hwlkm89sf18no945kh7e`;
 		const filePath = process.env.USERPROFILE + '/twitch-tts/.env'; // Specify the file path
 
 		try {
