@@ -19,7 +19,8 @@ To download more voices head over to the following link for more instructions ht
 Enter in your twitch chat to perform these commands
 
 -   `!ttsskip` : Skip currently playing tts message
--   `!ttsnick {username} {nickname}` : Give a user a nickname (Nicknames are stored in %USERPROFILE%/twitch-tts/nicknames.json)
+-   `!ttsnick {username} {nickname}` : Give a user a nickname, nicknames can be multiple words (Nicknames are stored in %USERPROFILE%/twitch-tts/nicknames.json)
+-   `!ttsreplace {acronym} {replacement}` : Give an acronym a long form word (Nicknames are stored in %USERPROFILE%/twitch-tts/replacement.json)
 -   `!ttsjoin {username}` : to join another channel's chat
 -   `!ttsleave {username}` : to leave another channel's chat
 
@@ -28,6 +29,8 @@ Enter in your twitch chat to perform these commands
 Enter in the terminal window to perform these commands
 
 -   `!resetconf` : to delete config file
--   `!nick {username} {nickname}` : Give a user a nickname (Nicknames are stored in %USERPROFILE%/twitch-tts/nicknames.json)
+-   `!nick {username} {nickname}` : Give a user a nickname, nicknames can be multiple words (Nicknames are stored in %USERPROFILE%/twitch-tts/nicknames.json)
+-   `!replace {acronym} {replacement}` : Give an acronym a long form word (Nicknames are stored in %USERPROFILE%/twitch-tts/replacement.json)
+-   `!read {text}` : read a test message to test tts
 -   `!join {username}` : to join another channel's chat
 -   `!leave {username}` : to leave another channel's chat
