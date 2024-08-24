@@ -48,6 +48,30 @@ let {
 } = require('./cred.js');
 const { twitchsecret } = require('./twitchcred.js');
 
+async function writeEnv() {
+	const content = `USER=${user}
+PASSWORD=${password}
+READEMOTES=${reademotes}
+IGNOREPREFIX=${ignoreprefix}
+VOICE=${voice}
+SPEED=${speed}
+IGNORESELF=${ignoreself}
+TRAILINGNUM=${trailingnum}
+READREDEEMS=${readredeems}
+SPEECHFORMAT=${speechformat}
+REDEEMFORMAT=${redeemformat}
+ACCTOKEN=${acctoken}
+TWITCHID=v9xn3jant9hwlkm89sf18no945kh7e`;
+	const filePath = process.env.USERPROFILE + '/twitch-tts/.env'; // Specify the file path
+
+	try {
+		fs.writeFileSync(filePath, content);
+		console.log('\n.env file written successfully!');
+	} catch (err) {
+		console.error('Error writing env file:', err);
+	}
+}
+
 async function downloadFile() {
 	try {
 		const response = await axios({
@@ -140,14 +164,6 @@ async function main() {
 		reply = await questionPrompt('\nPASSWORD(NOT YOUR TWITCH ACCOUNT PASSWORD! Get your password here https://twitchapps.com/tmi/): ');
 		password = reply;
 
-		reply = await questionPrompt('\nRead Emotes(1 for yes, 0 for no, recommended: 0): ');
-		if (reply != 0 || reply != 1) reply = 0;
-		reademotes = reply;
-
-		reply = await questionPrompt('\nIgnore Prefix(1 for yes, 0 for no, recommended: 1): ');
-		if (reply != 0 || reply != 1) reply = 1;
-		ignoreprefix = reply;
-
 		let voicesList;
 		async function usingVoices() {
 			voicesList = await getVoices();
@@ -160,31 +176,7 @@ async function main() {
 		if (voicesList.indexOf(reply) === -1) reply = `Microsoft David Desktop`;
 		voice = reply;
 
-		reply = await questionPrompt('\nTTS Speed(recommended: 1): ');
-		if (reply <= 0) reply = 1;
-		speed = reply;
-
-		reply = await questionPrompt('\nIgnore own message(recommended: 1): ');
-		if (reply != 0 || reply != 1) reply = 1;
-		ignoreself = reply;
-
-		reply = await questionPrompt('\nSay trailing numbers in username(recommended: 0): ');
-		if (reply != 0 || reply != 1) reply = 0;
-		trailingnum = reply;
-
-		reply = await questionPrompt('\nRead twitch redeems(recommended: 0): ');
-		if (reply != 0 || reply != 1) reply = 0;
-		readredeems = reply;
-
-		reply = await questionPrompt('\nSpeech Format(Default: $username said $message): ');
-		if (reply == '' || reply == undefined) reply = '$username said $message';
-		speechformat = reply;
-
-		reply = await questionPrompt('\nRedeem Format(Default: $username redeemed $redeem for $cost): ');
-		if (reply == '' || reply == undefined) reply = '$username redeemed $redeem for $cost';
-		redeemformat = reply;
-
-		let accToken = '';
+		acctoken = '';
 		const server = http.createServer(app);
 		// Start the server
 		server.listen(port, () => {
@@ -201,7 +193,7 @@ async function main() {
 
 		// Listener for POST requests
 		app.post('/post', (req, res) => {
-			accToken = req.body.access_token;
+			acctoken = req.body.access_token;
 			// Process the URL as needed (e.g., save to a database, perform some action)
 			res.status(200).end();
 			server.close(() => {
@@ -211,31 +203,55 @@ async function main() {
 			});
 		});
 
-		while (accToken == '') {
+		while (acctoken == '') {
 			await sleep(2000);
 		}
 
-		const content = `USER=${user}
-PASSWORD=${password}
-READEMOTES=${reademotes}
-IGNOREPREFIX=${ignoreprefix}
-VOICE=${voice}
-SPEED=${speed}
-IGNORESELF=${ignoreself}
-TRAILINGNUM=${trailingnum}
-READREDEEMS=${readredeems}
-SPEECHFORMAT=${speechformat}
-REDEEMFORMAT=${redeemformat}
-ACCTOKEN=${accToken}
-TWITCHID=v9xn3jant9hwlkm89sf18no945kh7e`;
-		const filePath = process.env.USERPROFILE + '/twitch-tts/.env'; // Specify the file path
+		reply = await questionPrompt('\nDo you want to go though advanced setup?(y/n): ');
+		if (reply.toLowerCase() == 'y') {
+			reply = await questionPrompt('\nRead Emotes(1 for yes, 0 for no, recommended: 0): ');
+			if (reply != 0 || reply != 1) reply = 0;
+			reademotes = reply;
 
-		try {
-			fs.writeFileSync(filePath, content);
-			console.log('\n\n.env file created successfully!');
-		} catch (err) {
-			console.error('Error writing to file (synchronously):', err);
+			reply = await questionPrompt('\nIgnore Prefix(1 for yes, 0 for no, recommended: 1): ');
+			if (reply != 0 || reply != 1) reply = 1;
+			ignoreprefix = reply;
+
+			reply = await questionPrompt('\nTTS Speed(recommended: 1): ');
+			if (reply <= 0) reply = 1;
+			speed = reply;
+
+			reply = await questionPrompt('\nIgnore own message(recommended: 1): ');
+			if (reply != 0 || reply != 1) reply = 1;
+			ignoreself = reply;
+
+			reply = await questionPrompt('\nSay trailing numbers in username(recommended: 1): ');
+			if (reply != 0 || reply != 1) reply = 0;
+			trailingnum = reply;
+
+			reply = await questionPrompt('\nRead twitch redeems(recommended: 0): ');
+			if (reply != 0 || reply != 1) reply = 0;
+			readredeems = reply;
+
+			reply = await questionPrompt('\nSpeech Format(Default: $username said $message): ');
+			if (reply == '' || reply == undefined) reply = '$username said $message';
+			speechformat = reply;
+
+			reply = await questionPrompt('\nRedeem Format(Default: $username redeemed $redeem for $cost): ');
+			if (reply == '' || reply == undefined) reply = '$username redeemed $redeem for $cost';
+			redeemformat = reply;
+		} else {
+			reademotes = 0;
+			ignoreprefix = 1;
+			speed = 1;
+			ignoreself = 1;
+			trailingnum = 1;
+			readredeems = 0;
+			speechformat = '$username said $message';
+			redeemformat = '$username redeemed $redeem for $cost points';
 		}
+
+		writeEnv();
 	}
 
 	let nicknames;
@@ -408,6 +424,46 @@ TWITCHID=v9xn3jant9hwlkm89sf18no945kh7e`;
 			} else if (reply.split(' ')[0] == '!voices') {
 				voicesList = await getVoices();
 				console.log(voicesList);
+			} else if (reply.split(' ')[0] == '!reademotes') {
+				if (reply.split(' ')[1] == 1 || reply.split(' ')[1] == 0) {
+					reademotes = reply.split(' ')[1];
+					writeEnv();
+				}
+			} else if (reply.split(' ')[0] == '!ignoreprefix') {
+				if (reply.split(' ')[1] == 1 || reply.split(' ')[1] == 0) {
+					ignoreprefix = reply.split(' ')[1];
+					writeEnv();
+				}
+			} else if (reply.split(' ')[0] == '!speed') {
+				if (!isNaN(reply.split(' ')[1])) {
+					speed = reply.split(' ')[1];
+					writeEnv();
+				}
+			} else if (reply.split(' ')[0] == '!ignoreself') {
+				if (reply.split(' ')[1] == 1 || reply.split(' ')[1] == 0) {
+					ignoreself = reply.split(' ')[1];
+					writeEnv();
+				}
+			} else if (reply.split(' ')[0] == '!trailingnum') {
+				if (reply.split(' ')[1] == 1 || reply.split(' ')[1] == 0) {
+					trailingnum = reply.split(' ')[1];
+					writeEnv();
+				}
+			} else if (reply.split(' ')[0] == '!readredeems') {
+				if (reply.split(' ')[1] == 1 || reply.split(' ')[1] == 0) {
+					readredeems = reply.split(' ')[1];
+					writeEnv();
+				}
+			} else if (reply.split(' ')[0] == '!speechformat') {
+				speechformat = reply.split(' ').slice(1).join(' ');
+				writeEnv();
+			} else if (reply.split(' ')[0] == '!redeemformat') {
+				redeemformat = reply.split(' ').slice(1).join(' ');
+				writeEnv();
+			} else if (reply.split(' ')[0] == '!voice') {
+				if (voicesList.indexOf(reply.split(' ').slice(1).join(' ')) === -1) reply = `Microsoft David Desktop`;
+				voice = reply.split(' ').slice(1).join(' ');
+				writeEnv();
 			}
 			commandPrompt();
 		});
