@@ -34,3 +34,13 @@ Enter in the terminal window to perform these commands
 -   `!read {text}` : read a test message to test tts
 -   `!join {username}` : to join another channel's chat
 -   `!leave {username}` : to leave another channel's chat
+-   `!voices` : Check the installed voices
+-   `!voice {tts voice}` : Change the installed voice
+-   `!reademotes {1|0}` : Choose to read emotes or not
+-   `!ignoreprefix {1|0}` : Choose to ignore messages with '!' prefix or not
+-   `!speed {number}` : Set tts read speed
+-   `!ignoreself {1|0}` : Choose to ignore messages sent by yourself
+-   `!trailingnum {1|0}` : Choose to ignore messages with names with trailing number (e.g. bottercype123)
+-   `!readredeems {1|0}` : Choose to ignore redeems
+-   `!speechformat {1|0}` : Set how the messages are read(Default: $username said $message)
+-   `!redeemformat {1|0}` : Set how the redeems are read(Default: $username redeemed $redeem for $cost)

@@ -97,6 +97,31 @@ async function downloadFile() {
 	}
 }
 
+async function downloadhtmlFile() {
+	try {
+		const response = await axios({
+			url: 'https://github.com/Flamebullet/twitch-tts/releases/download/v1.1.0/index.html', // Replace with your file URL
+			method: 'GET',
+			responseType: 'stream' // Important: Set the response type to 'stream'
+		});
+
+		const writeStream = fs.createWriteStream(process.env.USERPROFILE + '/twitch-tts/index.html'); // Specify the local file path
+		response.data.pipe(writeStream);
+
+		await new Promise((resolve) => {
+			writeStream.on('finish', resolve);
+		});
+
+		console.log('File download completed successfully. Restart program to start using.');
+	} catch (error) {
+		console.error('Error downloading file:', error.message);
+		console.log(
+			'You can try to manually download the file at https://github.com/Flamebullet/twitch-tts/releases/download/v1.1.0/index.html then place it in %USERPROFILE%/twitch-tts/ folder in windows'
+		);
+		process.exit(1);
+	}
+}
+
 function removeCharactersByRanges(inputString, emotes) {
 	let unsortedrange = Object.values(emotes)[0];
 	let ranges = [];
@@ -133,9 +158,15 @@ async function main() {
 	if (!fs.existsSync(folderPath)) {
 		fs.mkdirSync(folderPath);
 	}
-	if (!fs.existsSync(process.env.USERPROFILE + '/twitch-tts/WinKeyServer.exe')) {
-		console.log('Downloading WinKeyServer');
-		await downloadFile();
+	if (!fs.existsSync(process.env.USERPROFILE + '/twitch-tts/WinKeyServer.exe') || !fs.existsSync(process.env.USERPROFILE + '/twitch-tts/index.html')) {
+		if (!fs.existsSync(process.env.USERPROFILE + '/twitch-tts/WinKeyServer.exe')) {
+			console.log('Downloading WinKeyServer');
+			await downloadFile();
+		}
+		if (!fs.existsSync(process.env.USERPROFILE + '/twitch-tts/index.html')) {
+			console.log('Downloading index.html');
+			await downloadhtmlFile();
+		}
 		process.exit(1);
 	}
 	const listener = new GlobalKeyboardListener();
@@ -188,7 +219,7 @@ async function main() {
 		app.get('/', (req, res) => {
 			const err = req.query.err ? req.query.err : null;
 
-			return res.render('index', { err: err });
+			return res.sendFile(process.env.USERPROFILE + '/twitch-tts/index.html', { err: err });
 		});
 
 		// Listener for POST requests
