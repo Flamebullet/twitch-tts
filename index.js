@@ -421,7 +421,7 @@ async function main() {
 		let username = tags.username;
 		if (tags.username in nicknames) {
 			username = nicknames[tags.username];
-		} else if (tags.username && !trailingnum) {
+		} else if (tags.username && trailingnum == 0) {
 			username = tags.username.replace(/\d+$/, '');
 		}
 
