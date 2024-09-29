@@ -11,6 +11,7 @@ module.exports = {
 	ignoreself: process.env.IGNORESELF,
 	trailingnum: process.env.TRAILINGNUM,
 	readredeems: process.env.READREDEEMS,
+	readads: process.env.READADS,
 	speechformat: process.env.SPEECHFORMAT,
 	redeemformat: process.env.REDEEMFORMAT,
 	acctoken: process.env.ACCTOKEN,

@@ -42,5 +42,6 @@ Enter in the terminal window to perform these commands
 -   `!ignoreself {1|0}` : Choose to ignore messages sent by yourself
 -   `!trailingnum {1|0}` : Choose to ignore messages with names with trailing number (e.g. bottercype123)
 -   `!readredeems {1|0}` : Choose to ignore redeems
+-   `!readads {1|0}` : Choose to notify upcoming ad break
 -   `!speechformat {1|0}` : Set how the messages are read(Default: $username said $message)
 -   `!redeemformat {1|0}` : Set how the redeems are read(Default: $username redeemed $redeem for $cost)

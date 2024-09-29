@@ -44,6 +44,7 @@ let {
 	trailingnum,
 	acctoken,
 	readredeems,
+	readads,
 	twitchid
 } = require('./cred.js');
 const { twitchsecret } = require('./twitchcred.js');
@@ -58,6 +59,7 @@ SPEED=${speed}
 IGNORESELF=${ignoreself}
 TRAILINGNUM=${trailingnum}
 READREDEEMS=${readredeems}
+READADS=${readads}
 SPEECHFORMAT=${speechformat}
 REDEEMFORMAT=${redeemformat}
 ACCTOKEN=${acctoken}
@@ -95,6 +97,18 @@ async function downloadFile() {
 		);
 		process.exit(1);
 	}
+}
+
+function convertMs(milliseconds) {
+	let seconds = milliseconds / 1000;
+	let minutes = Math.floor(seconds / 60);
+	let remainingSeconds = (seconds % 60).toFixed(0);
+
+	return {
+		minutes: minutes,
+		remainingSeconds: remainingSeconds,
+		totalSeconds: seconds.toFixed(0)
+	};
 }
 
 async function downloadhtmlFile() {
@@ -212,7 +226,7 @@ async function main() {
 		// Start the server
 		server.listen(port, () => {
 			console.log(
-				`\nAuthenticate your twitch account here https://id.twitch.tv/oauth2/authorize?response_type=token&client_id=v9xn3jant9hwlkm89sf18no945kh7e&redirect_uri=http://localhost:3000&scope=channel%3Aread%3Aredemptions`
+				`\nAuthenticate your twitch account here https://id.twitch.tv/oauth2/authorize?response_type=token&client_id=v9xn3jant9hwlkm89sf18no945kh7e&redirect_uri=http://localhost:3000&scope=channel%3Aread%3Aredemptions%20channel%3Aread%3Aads`
 			);
 		});
 
@@ -264,6 +278,10 @@ async function main() {
 			if (reply != 0 || reply != 1) reply = 0;
 			readredeems = reply;
 
+			reply = await questionPrompt('\nAlert upcoming ad break(recommended: 0): ');
+			if (reply != 0 || reply != 1) reply = 0;
+			readads = reply;
+
 			reply = await questionPrompt('\nSpeech Format(Default: $username said $message): ');
 			if (reply == '' || reply == undefined) reply = '$username said $message';
 			speechformat = reply;
@@ -278,6 +296,7 @@ async function main() {
 			ignoreself = 1;
 			trailingnum = 1;
 			readredeems = 0;
+			readads = 0;
 			speechformat = '$username said $message';
 			redeemformat = '$username redeemed $redeem for $cost points';
 		}
@@ -375,6 +394,62 @@ async function main() {
 
 			const formatedmsg = redeemformat.replace('$username', username).replace('$redeem', data.reward.title).replace('$cost', data.reward.cost);
 			console.log(`${username} redeemed ${data.reward.title} for ${data.reward.cost} channel points`);
+
+			ttsQueue.push(formatedmsg);
+
+			if (!currentlySpeaking) speak();
+		});
+	}
+
+	if (readads == true) {
+		// On stream online, check for next ad break
+		TEclient.register('streamOnline', {
+			broadcaster_user_id: userId
+		}).onTrigger(async (data) => {
+			let timer = 0;
+			while (true) {
+				let result = await axios({
+					method: 'get',
+					url: `https://api.twitch.tv/helix/channels/ads?broadcaster_id=${userId}`,
+					headers: {
+						'Client-ID': twitchid,
+						'Authorization': `Bearer ${await authProvider.getUserAccessToken()}`
+					}
+				});
+				const nextAdTime = new Date(result.data.data[0].next_ad_at * 1000);
+
+				if (!nextAdTime || nextAdTime < new Date(Date.now())) {
+					timer = 300000;
+				} else {
+					const nextAdTimeInms = nextAdTime - new Date(Date.now());
+					if (nextAdTimeInms < 300000) {
+						// if ad break lesser than 5mins warn and check again in 5mins
+						const time = convertMs(nextAdTimeInms);
+						let formatedmsg;
+
+						if (time.totalSeconds < 60) {
+							formatedmsg = `An ad break is starting in about ${time.totalSeconds} seconds`;
+							console.log(`Channel: An ad break is starting in about ${time.totalSeconds}s.`);
+						} else {
+							formatedmsg = `An ad break is starting in about ${time.minutes} minutes ${time.remainingSeconds} seconds`;
+							console.log(`Channel: An ad break is starting in about ${time.minutes}min ${time.remainingSeconds}s.`);
+						}
+						ttsQueue.push(formatedmsg);
+						timer = 300000;
+					} else {
+						// subtract 5mins from next adtime to get 5min warning
+						timer = nextAdTimeInms - 300000;
+					}
+				}
+				await sleep(timer);
+			}
+		});
+
+		TEclient.register('channelAdBreakBegin', {
+			broadcaster_user_id: userId
+		}).onTrigger(async (data) => {
+			const formatedmsg = `An ad break of ${data.duration_seconds} seconds has begun`;
+			console.log(`Channel: An ad break of ${data.duration_seconds} seconds has begun`);
 
 			ttsQueue.push(formatedmsg);
 
@@ -483,6 +558,11 @@ async function main() {
 			} else if (reply.split(' ')[0] == '!readredeems') {
 				if (reply.split(' ')[1] == 1 || reply.split(' ')[1] == 0) {
 					readredeems = reply.split(' ')[1];
+					writeEnv();
+				}
+			} else if (reply.split(' ')[0] == '!readads') {
+				if (reply.split(' ')[1] == 1 || reply.split(' ')[1] == 0) {
+					readads = reply.split(' ')[1];
 					writeEnv();
 				}
 			} else if (reply.split(' ')[0] == '!speechformat') {
