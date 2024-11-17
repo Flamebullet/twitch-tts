@@ -100,7 +100,7 @@ async function downloadFile() {
 }
 
 function convertMs(milliseconds) {
-	let seconds = milliseconds / 1000;
+	let seconds = Math.round(milliseconds / 1000);
 	let minutes = Math.floor(seconds / 60);
 	let remainingSeconds = (seconds % 60).toFixed(0);
 
@@ -337,7 +337,6 @@ async function main() {
 		}
 	});
 	let userId = result.data.data[0].id;
-
 	const client = new tmi.Client({
 		options: { debug: true },
 		connection: {
@@ -419,12 +418,14 @@ async function main() {
 				const nextAdTime = new Date(result.data.data[0].next_ad_at * 1000);
 
 				if (!nextAdTime || nextAdTime < new Date(Date.now())) {
-					timer = 300000;
+					timer = 60000;
 				} else {
 					const nextAdTimeInms = nextAdTime - new Date(Date.now());
 					if (nextAdTimeInms < 300000) {
-						// if ad break lesser than 5mins warn and check again in 5mins
+						// if ad break lesser than 5mins warn and check again in 1min
 						const time = convertMs(nextAdTimeInms);
+						// console.log(time, nextAdTimeInms, nextAdTime, new Date(Date.now()));
+						// fs.appendFile('error.txt', `\n${time.totalSeconds} ${nextAdTimeInms} ${nextAdTime} ${new Date(Date.now())}`, () => {});
 						let formatedmsg;
 
 						if (time.totalSeconds < 60) {
@@ -435,9 +436,10 @@ async function main() {
 							console.log(`Channel: An ad break is starting in about ${time.minutes}min ${time.remainingSeconds}s.`);
 						}
 						ttsQueue.push(formatedmsg);
-						timer = 300000;
+						if (!currentlySpeaking) speak();
+						timer = 60000;
 					} else {
-						// subtract 5mins from next adtime to get 5min warning
+						// subtract 1mins from next adtime to get warning
 						timer = nextAdTimeInms - 300000;
 					}
 				}
@@ -452,7 +454,6 @@ async function main() {
 			console.log(`Channel: An ad break of ${data.duration_seconds} seconds has begun`);
 
 			ttsQueue.push(formatedmsg);
-
 			if (!currentlySpeaking) speak();
 		});
 	}
