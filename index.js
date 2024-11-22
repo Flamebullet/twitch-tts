@@ -8,6 +8,7 @@ const rl = readline.createInterface({
 	input: process.stdin,
 	output: process.stdout
 });
+const WebSocket = require('ws');
 
 // webserver stuff
 const express = require('express');
@@ -45,7 +46,8 @@ let {
 	acctoken,
 	readredeems,
 	readads,
-	twitchid
+	twitchid,
+	wsport
 } = require('./cred.js');
 const { twitchsecret } = require('./twitchcred.js');
 
@@ -63,7 +65,8 @@ READADS=${readads}
 SPEECHFORMAT=${speechformat}
 REDEEMFORMAT=${redeemformat}
 ACCTOKEN=${acctoken}
-TWITCHID=v9xn3jant9hwlkm89sf18no945kh7e`;
+TWITCHID=v9xn3jant9hwlkm89sf18no945kh7e
+WSPORT=${wsport}`;
 	const filePath = process.env.USERPROFILE + '/twitch-tts/.env'; // Specify the file path
 
 	try {
@@ -201,6 +204,26 @@ async function main() {
 		});
 	}
 
+	const server = http.createServer(app);
+
+	app.get('/', (req, res) => {
+		const err = req.query.err ? req.query.err : null;
+
+		return res.sendFile(process.env.USERPROFILE + '/twitch-tts/index.html', { err: err });
+	});
+
+	// Listener for POST requests
+	app.post('/post', (req, res) => {
+		acctoken = req.body.access_token;
+		// Process the URL as needed (e.g., save to a database, perform some action)
+		res.status(200).end();
+		server.close(() => {
+			setImmediate(() => {
+				server.emit('close');
+			});
+		});
+	});
+
 	// Create .env file for initialisation
 	if (user == undefined || password == undefined) {
 		let reply = await questionPrompt('USERNAME(Enter twitch username): ');
@@ -222,30 +245,11 @@ async function main() {
 		voice = reply;
 
 		acctoken = '';
-		const server = http.createServer(app);
 		// Start the server
 		server.listen(port, () => {
 			console.log(
 				`\nAuthenticate your twitch account here https://id.twitch.tv/oauth2/authorize?response_type=token&client_id=v9xn3jant9hwlkm89sf18no945kh7e&redirect_uri=http://localhost:3000&scope=channel%3Aread%3Aredemptions%20channel%3Aread%3Aads`
 			);
-		});
-
-		app.get('/', (req, res) => {
-			const err = req.query.err ? req.query.err : null;
-
-			return res.sendFile(process.env.USERPROFILE + '/twitch-tts/index.html', { err: err });
-		});
-
-		// Listener for POST requests
-		app.post('/post', (req, res) => {
-			acctoken = req.body.access_token;
-			// Process the URL as needed (e.g., save to a database, perform some action)
-			res.status(200).end();
-			server.close(() => {
-				setImmediate(() => {
-					server.emit('close');
-				});
-			});
 		});
 
 		while (acctoken == '') {
@@ -300,6 +304,7 @@ async function main() {
 			speechformat = '$username said $message';
 			redeemformat = '$username redeemed $redeem for $cost points';
 		}
+		wsport = 6970;
 
 		writeEnv();
 	}
@@ -328,14 +333,32 @@ async function main() {
 	const TEclient = new EventSub(authProvider);
 	TEclient.run();
 
-	const result = await axios({
-		method: 'get',
-		url: `https://api.twitch.tv/helix/users?login=${user}`,
-		headers: {
-			'Client-ID': twitchid,
-			'Authorization': `Bearer ${await authProvider.getUserAccessToken()}`
-		}
-	});
+	let result;
+	while (true) {
+		result = await axios({
+			method: 'get',
+			url: `https://api.twitch.tv/helix/users?login=${user}`,
+			headers: {
+				'Client-ID': twitchid,
+				'Authorization': `Bearer ${await authProvider.getUserAccessToken()}`
+			}
+		}).catch(async (err) => {
+			acctoken = '';
+			// Start the server
+			server.listen(port, () => {
+				console.log(
+					`\nAuthenticate your twitch account here https://id.twitch.tv/oauth2/authorize?response_type=token&client_id=v9xn3jant9hwlkm89sf18no945kh7e&redirect_uri=http://localhost:3000&scope=channel%3Aread%3Aredemptions%20channel%3Aread%3Aads`
+				);
+			});
+
+			while (acctoken == '') {
+				await sleep(2000);
+			}
+			wsport = 6970;
+			writeEnv();
+		});
+		if (result?.data?.data[0].id) break;
+	}
 	let userId = result.data.data[0].id;
 	const client = new tmi.Client({
 		options: { debug: true },
@@ -424,8 +447,6 @@ async function main() {
 					if (nextAdTimeInms < 300000) {
 						// if ad break lesser than 5mins warn and check again in 1min
 						const time = convertMs(nextAdTimeInms);
-						// console.log(time, nextAdTimeInms, nextAdTime, new Date(Date.now()));
-						// fs.appendFile('error.txt', `\n${time.totalSeconds} ${nextAdTimeInms} ${nextAdTime} ${new Date(Date.now())}`, () => {});
 						let formatedmsg;
 
 						if (time.totalSeconds < 60) {
@@ -451,12 +472,49 @@ async function main() {
 			broadcaster_user_id: userId
 		}).onTrigger(async (data) => {
 			const formatedmsg = `An ad break of ${data.duration_seconds} seconds has begun`;
-			console.log(`Channel: An ad break of ${data.duration_seconds} seconds has begun`);
+			console.log(`Channel: ${formatedmsg}`);
 
 			ttsQueue.push(formatedmsg);
 			if (!currentlySpeaking) speak();
+
+			await sleep(data.duration_seconds * 1000);
+
+			ttsQueue.push(`An ad break over`);
+			if (!currentlySpeaking) speak();
 		});
 	}
+
+	client.on('cheer', async (channel, userstate, message) => {
+		const formatedmsg = `${userstate['display-name']} cheered ${userstate.bits}, ${message}`;
+		console.log(`Channel: ${formatedmsg}`);
+
+		ttsQueue.push(formatedmsg);
+		if (!currentlySpeaking) speak();
+	});
+
+	const wss = new WebSocket.Server({ port: wsport });
+
+	wss.on('connection', (ws, req) => {
+		// Repeat the received message to twitch chat
+		ws.on('message', (message) => {
+			switch (req.url) {
+				case '/message':
+					console.log(`Message Received: ${message}`);
+
+					client.say(user, `${message}`);
+					break;
+				case '/tts':
+					console.log(`TTS Received: ${message}`);
+
+					ttsQueue.push(message);
+					console.log(ttsQueue);
+					if (!currentlySpeaking) speak();
+					break;
+			}
+		});
+	});
+
+	console.log(`WebSocket server is listening on port ${wsport}`);
 
 	client.on('message', async (channel, tags, message, self) => {
 		if (((tags.badges && tags.badges.broadcaster == '1') || tags.mod) && message.startsWith('!')) {
@@ -585,8 +643,10 @@ async function main() {
 		currentlySpeaking = true;
 		while (ttsQueue.length > 0) {
 			const ttsMsg = ttsQueue.shift();
-			await tts(ttsMsg);
-			await sleep(500);
+			if (ttsMsg != '') {
+				await tts(ttsMsg);
+				await sleep(500);
+			}
 			if (ttsQueue.length == 0) currentlySpeaking = false;
 		}
 	}

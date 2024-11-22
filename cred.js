@@ -15,5 +15,6 @@ module.exports = {
 	speechformat: process.env.SPEECHFORMAT,
 	redeemformat: process.env.REDEEMFORMAT,
 	acctoken: process.env.ACCTOKEN,
-	twitchid: process.env.TWITCHID
+	twitchid: process.env.TWITCHID,
+	wsport: process.env.WSPORT
 };
