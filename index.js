@@ -507,7 +507,6 @@ async function main() {
 					console.log(`TTS Received: ${message}`);
 
 					ttsQueue.push(message);
-					console.log(ttsQueue);
 					if (!currentlySpeaking) speak();
 					break;
 			}
