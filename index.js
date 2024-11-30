@@ -39,7 +39,6 @@ let {
 	ignoreprefix,
 	voice,
 	speed,
-	ignoreself,
 	speechformat,
 	redeemformat,
 	trailingnum,
@@ -58,7 +57,6 @@ READEMOTES=${reademotes}
 IGNOREPREFIX=${ignoreprefix}
 VOICE=${voice}
 SPEED=${speed}
-IGNORESELF=${ignoreself}
 TRAILINGNUM=${trailingnum}
 READREDEEMS=${readredeems}
 READADS=${readads}
@@ -171,6 +169,7 @@ function tts(text) {
 }
 
 async function main() {
+	let lastSpeaker;
 	const folderPath = process.env.USERPROFILE + '/twitch-tts';
 	if (!fs.existsSync(folderPath)) {
 		fs.mkdirSync(folderPath);
@@ -270,10 +269,6 @@ async function main() {
 			if (reply <= 0) reply = 1;
 			speed = reply;
 
-			reply = await questionPrompt('\nIgnore own message(recommended: 1): ');
-			if (reply != 0 || reply != 1) reply = 1;
-			ignoreself = reply;
-
 			reply = await questionPrompt('\nSay trailing numbers in username(recommended: 1): ');
 			if (reply != 0 || reply != 1) reply = 0;
 			trailingnum = reply;
@@ -297,7 +292,6 @@ async function main() {
 			reademotes = 0;
 			ignoreprefix = 1;
 			speed = 1;
-			ignoreself = 1;
 			trailingnum = 1;
 			readredeems = 0;
 			readads = 0;
@@ -316,6 +310,15 @@ async function main() {
 	} else {
 		fs.writeFileSync(nickJsonFilePath, JSON.stringify({}));
 		nicknames = {};
+	}
+
+	let ignoreNames;
+	const ignoreJsonFilePath = process.env.USERPROFILE + '/twitch-tts/ignore.json';
+	if (fs.existsSync(ignoreJsonFilePath)) {
+		ignoreNames = JSON.parse(fs.readFileSync(ignoreJsonFilePath));
+	} else {
+		fs.writeFileSync(ignoreJsonFilePath, JSON.stringify({}));
+		ignoreNames = {};
 	}
 
 	let replacements;
@@ -484,13 +487,13 @@ async function main() {
 		});
 	}
 
-	client.on('cheer', async (channel, userstate, message) => {
-		const formatedmsg = `${userstate['display-name']} cheered ${userstate.bits}, ${message}`;
-		console.log(`Channel: ${formatedmsg}`);
+	// client.on('cheer', async (channel, userstate, message) => {
+	// 	const formatedmsg = `${userstate['display-name']} cheered ${userstate.bits}, ${message}`;
+	// 	console.log(`Channel: ${formatedmsg}`);
 
-		ttsQueue.push(formatedmsg);
-		if (!currentlySpeaking) speak();
-	});
+	// 	ttsQueue.push(formatedmsg);
+	// 	if (!currentlySpeaking) speak();
+	// });
 
 	const wss = new WebSocket.Server({ port: wsport });
 
@@ -516,6 +519,7 @@ async function main() {
 	console.log(`WebSocket server is listening on port ${wsport}`);
 
 	client.on('message', async (channel, tags, message, self) => {
+		//commands
 		if (((tags.badges && tags.badges.broadcaster == '1') || tags.mod) && message.startsWith('!')) {
 			if (message.toLowerCase() == '!ttsskip') {
 				skipTTS();
@@ -525,6 +529,9 @@ async function main() {
 				const words = message.split(' ');
 				const nickname = words.slice(2).join(' ').toLowerCase();
 				client.say(channel, `${tags.username} set ${message.split(' ')[1].toLowerCase()} to ${nickname}`);
+			} else if (message.split(' ')[0] == '!ttsignore') {
+				setIgnore(ignoreNames, message, ignoreJsonFilePath);
+				client.say(channel, `${tags.username} ${message.split(' ')[1].toLowerCase()} ignored`);
 			} else if (message.split(' ')[0] == '!ttsreplace') {
 				setReplacement(replacements, message, replacementJsonFilePath);
 				const words = message.split(' ');
@@ -542,8 +549,8 @@ async function main() {
 		if (ignoreprefix && message.startsWith('!')) return;
 		// Skip message with only emotes
 		if (!reademotes && tags['emote-only']) return;
-		// Skip message from yourself
-		if (ignoreself && tags.username.toLowerCase() == user.toLowerCase()) return;
+		// Skip message from ignored
+		if (tags.username.toLowerCase() in ignoreNames) return;
 
 		let msg = message;
 		// Remove emotes from messages if dont read emotes is selected
@@ -579,6 +586,8 @@ async function main() {
 				leaveChannelChat(client, joinChannels, reply, joinChannelsFilePath);
 			} else if (reply.split(' ')[0] == '!nick') {
 				setNickname(nicknames, reply, nickJsonFilePath);
+			} else if (reply.split(' ')[0] == '!ignore') {
+				setIgnore(ignoreNames, reply, ignoreJsonFilePath);
 			} else if (reply.split(' ')[0] == '!replace') {
 				setReplacement(replacements, reply, replacementJsonFilePath);
 			} else if (reply.split(' ')[0] == '!read') {
@@ -601,11 +610,6 @@ async function main() {
 			} else if (reply.split(' ')[0] == '!speed') {
 				if (!isNaN(reply.split(' ')[1])) {
 					speed = reply.split(' ')[1];
-					writeEnv();
-				}
-			} else if (reply.split(' ')[0] == '!ignoreself') {
-				if (reply.split(' ')[1] == 1 || reply.split(' ')[1] == 0) {
-					ignoreself = reply.split(' ')[1];
 					writeEnv();
 				}
 			} else if (reply.split(' ')[0] == '!trailingnum') {
@@ -672,6 +676,25 @@ function setNickname(nicknames, reply, nickJsonFilePath) {
 
 	fs.writeFileSync(nickJsonFilePath, JSON.stringify(nicknames));
 	console.log(`Successfully set nickname for ${username} to ${nickname}`);
+}
+
+function setIgnore(ignoreNames, reply, ignoreJsonFilePath) {
+	let username = reply.split(' ')[1].toLowerCase();
+
+	// remove @ if start with @
+	if (username.startsWith('@')) {
+		username = username.substring(1);
+	}
+
+	if (username in ignoreNames) {
+		delete ignoreNames[username];
+		console.log(`Successfully removed ignore for ${username}`);
+	} else {
+		ignoreNames[username] = username;
+		console.log(`Successfully set ignore for ${username}`);
+	}
+
+	fs.writeFileSync(ignoreJsonFilePath, JSON.stringify(ignoreNames));
 }
 
 function setReplacement(replacements, reply, replacementJsonFilePath) {
