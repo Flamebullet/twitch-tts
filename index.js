@@ -40,6 +40,7 @@ let {
 	voice,
 	speed,
 	speechformat,
+	repeatedspeakerformat,
 	redeemformat,
 	trailingnum,
 	acctoken,
@@ -61,6 +62,7 @@ TRAILINGNUM=${trailingnum}
 READREDEEMS=${readredeems}
 READADS=${readads}
 SPEECHFORMAT=${speechformat}
+REPEATEDSPEAKERFORMAT=${repeatedspeakerformat}
 REDEEMFORMAT=${redeemformat}
 ACCTOKEN=${acctoken}
 TWITCHID=v9xn3jant9hwlkm89sf18no945kh7e
@@ -169,7 +171,6 @@ function tts(text) {
 }
 
 async function main() {
-	let lastSpeaker;
 	const folderPath = process.env.USERPROFILE + '/twitch-tts';
 	if (!fs.existsSync(folderPath)) {
 		fs.mkdirSync(folderPath);
@@ -285,6 +286,10 @@ async function main() {
 			if (reply == '' || reply == undefined) reply = '$username said $message';
 			speechformat = reply;
 
+			reply = await questionPrompt('\nRepeated Speaker Speech Format(Leaving empty will disable this, use $username and $message to format): ');
+			if (reply == undefined) reply = '';
+			repeatedspeakerformat = reply;
+
 			reply = await questionPrompt('\nRedeem Format(Default: $username redeemed $redeem for $cost): ');
 			if (reply == '' || reply == undefined) reply = '$username redeemed $redeem for $cost';
 			redeemformat = reply;
@@ -296,6 +301,7 @@ async function main() {
 			readredeems = 0;
 			readads = 0;
 			speechformat = '$username said $message';
+			repeatedspeakerformat = '';
 			redeemformat = '$username redeemed $redeem for $cost points';
 		}
 		wsport = 6970;
@@ -518,6 +524,7 @@ async function main() {
 
 	console.log(`WebSocket server is listening on port ${wsport}`);
 
+	let lastSpeaker, lastSpeakerCountdown;
 	client.on('message', async (channel, tags, message, self) => {
 		//commands
 		if (((tags.badges && tags.badges.broadcaster == '1') || tags.mod) && message.startsWith('!')) {
@@ -565,9 +572,15 @@ async function main() {
 			username = tags.username.replace(/\d+$/, '');
 		}
 
-		msg = msg.replace(/(\w+)/g, (match, key) => replacements[key] || match);
+		msg = msg.toLowerCase().replace(/(\w+)/g, (match, key) => replacements[key] || match);
 
-		const formatedmsg = speechformat.replace('$username', username).replace('$message', msg);
+		let formatedmsg;
+		if (repeatedspeakerformat != '' && lastSpeaker == tags.username) {
+			formatedmsg = repeatedspeakerformat.replace('$username', username).replace('$message', msg);
+		} else {
+			formatedmsg = speechformat.replace('$username', username).replace('$message', msg);
+		}
+		lastSpeaker = tags.username;
 
 		ttsQueue.push(formatedmsg);
 
@@ -630,6 +643,9 @@ async function main() {
 			} else if (reply.split(' ')[0] == '!speechformat') {
 				speechformat = reply.split(' ').slice(1).join(' ');
 				writeEnv();
+			} else if (reply.split(' ')[0] == '!repeatedspeakerformat') {
+				repeatedspeakerformat = reply.split(' ').slice(1).join(' ');
+				writeEnv();
 			} else if (reply.split(' ')[0] == '!redeemformat') {
 				redeemformat = reply.split(' ').slice(1).join(' ');
 				writeEnv();
@@ -643,6 +659,7 @@ async function main() {
 	}
 
 	async function speak() {
+		clearTimeout(lastSpeakerCountdown);
 		currentlySpeaking = true;
 		while (ttsQueue.length > 0) {
 			const ttsMsg = ttsQueue.shift();
@@ -650,7 +667,12 @@ async function main() {
 				await tts(ttsMsg);
 				await sleep(500);
 			}
-			if (ttsQueue.length == 0) currentlySpeaking = false;
+			if (ttsQueue.length == 0) {
+				currentlySpeaking = false;
+				lastSpeakerCountdown = setTimeout(() => {
+					lastSpeaker = '';
+				}, 10000);
+			}
 		}
 	}
 }

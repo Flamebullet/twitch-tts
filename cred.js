@@ -13,6 +13,7 @@ module.exports = {
 	readredeems: !!+process.env.READREDEEMS,
 	readads: !!+process.env.READADS,
 	speechformat: process.env.SPEECHFORMAT,
+	repeatedspeakerformat: process.env.REPEATEDSPEAKERFORMAT,
 	redeemformat: process.env.REDEEMFORMAT,
 	acctoken: process.env.ACCTOKEN,
 	twitchid: process.env.TWITCHID,
